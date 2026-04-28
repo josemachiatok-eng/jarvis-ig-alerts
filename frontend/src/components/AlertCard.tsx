@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import type { Alert, Account, Tag } from '../types';
+import { tagColors } from '../lib/tagColors';
 
 interface Props {
   alert: Alert;
@@ -11,20 +12,9 @@ interface Props {
   onTagChange: (username: string, tag: Tag) => void;
 }
 
-const AVATAR_BG: Record<Tag, string> = {
-  favourite: 'bg-amber-950/60 text-amber-300',
-  special:   'bg-violet-950/60 text-violet-300',
-  other:     'bg-zinc-800 text-zinc-400',
-};
-
-const TAG_PILL: Record<Tag, string> = {
-  favourite: 'bg-amber-950/60 text-amber-400 border-amber-800/50',
-  special:   'bg-violet-950/60 text-violet-400 border-violet-800/50',
-  other:     'bg-zinc-800/60 text-zinc-500 border-zinc-700/50',
-};
-
 export function AlertCard({ alert, account, isSelected, onSelect, onMarkArchived, onDelete }: Props) {
   const tag     = account?.tag ?? 'other';
+  const colors  = tagColors(tag);
   const isUnread = !alert.is_read;
   const timeAgo  = formatDistanceToNow(new Date(alert.detected_at), { addSuffix: true });
 
@@ -33,9 +23,7 @@ export function AlertCard({ alert, account, isSelected, onSelect, onMarkArchived
       onClick={() => onSelect(alert)}
       className={`w-full text-left relative flex items-center gap-3 px-3 py-3 border-b border-zinc-800/60
                   transition-colors group ${
-        isSelected
-          ? 'bg-zinc-800'
-          : 'hover:bg-zinc-800/50'
+        isSelected ? 'bg-zinc-800' : 'hover:bg-zinc-800/50'
       }`}
     >
       {/* Unread stripe */}
@@ -45,7 +33,7 @@ export function AlertCard({ alert, account, isSelected, onSelect, onMarkArchived
 
       {/* Avatar */}
       <div className={`flex-none w-9 h-9 rounded-full flex items-center justify-center
-                       text-sm font-bold uppercase select-none ${AVATAR_BG[tag]}`}>
+                       text-sm font-bold uppercase select-none ${colors.avatar}`}>
         {alert.username[0]}
       </div>
 
@@ -57,7 +45,7 @@ export function AlertCard({ alert, account, isSelected, onSelect, onMarkArchived
           }`}>
             @{alert.username}
           </span>
-          <span className={`flex-none px-1.5 py-0.5 rounded-full text-[10px] border font-medium ${TAG_PILL[tag]}`}>
+          <span className={`flex-none px-1.5 py-0.5 rounded-full text-[10px] border font-medium ${colors.pillActive}`}>
             {tag}
           </span>
           <span className="ml-auto flex-none text-[11px] text-zinc-600 whitespace-nowrap">{timeAgo}</span>
@@ -80,8 +68,8 @@ export function AlertCard({ alert, account, isSelected, onSelect, onMarkArchived
       </div>
 
       {/* Hover actions */}
-      <div className={`flex-none flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${
-        isSelected ? 'opacity-100' : ''
+      <div className={`flex-none flex gap-0.5 transition-opacity ${
+        isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
       }`}>
         {!alert.is_archived && (
           <button

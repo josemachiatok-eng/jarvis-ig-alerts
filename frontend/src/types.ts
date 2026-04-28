@@ -1,5 +1,5 @@
-export type Tag = 'favourite' | 'special' | 'other';
-export type View = 'all' | 'favourite' | 'special' | 'unread';  // or a username string
+export type Tag = string;  // any user-defined label; built-ins: 'favourite' | 'special' | 'other'
+export type View = 'all' | 'unread' | string;  // 'all', 'unread', a tag, or a username
 
 export interface Account {
   id: string;

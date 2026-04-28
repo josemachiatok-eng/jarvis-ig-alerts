@@ -1,34 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatDistanceToNow, format } from 'date-fns';
 import type { Alert, Account, Tag } from '../types';
+import { tagColors } from '../lib/tagColors';
 
 interface Props {
   alert: Alert | null;
   account: Account | undefined;
+  allTags: string[];
   onMarkArchived: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdateNote: (id: string, note: string) => void;
   onTagChange: (username: string, tag: Tag) => void;
 }
 
-const AVATAR_BG: Record<Tag, string> = {
-  favourite: 'bg-amber-950/60 text-amber-300',
-  special:   'bg-violet-950/60 text-violet-300',
-  other:     'bg-zinc-800 text-zinc-300',
-};
-
-const TAG_BTNS: { value: Tag; label: string; active: string }[] = [
-  { value: 'favourite', label: 'Favourite', active: 'bg-amber-950/60 text-amber-400 border-amber-700/50' },
-  { value: 'special',   label: 'Special',   active: 'bg-violet-950/60 text-violet-400 border-violet-700/50' },
-  { value: 'other',     label: 'Other',     active: 'bg-zinc-700 text-zinc-200 border-zinc-600' },
-];
-
-export function DetailPanel({ alert, account, onMarkArchived, onDelete, onUpdateNote, onTagChange }: Props) {
-  const [note, setNote] = useState('');
+export function DetailPanel({ alert, account, allTags, onMarkArchived, onDelete, onUpdateNote, onTagChange }: Props) {
+  const [note,         setNote]         = useState('');
+  const [addingTag,    setAddingTag]    = useState(false);
+  const [newTagInput,  setNewTagInput]  = useState('');
+  const newTagRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setNote(alert?.note ?? '');
+    setAddingTag(false);
+    setNewTagInput('');
   }, [alert?.id, alert?.note]);
+
+  useEffect(() => {
+    if (addingTag) newTagRef.current?.focus();
+  }, [addingTag]);
 
   if (!alert) {
     return (
@@ -39,18 +38,31 @@ export function DetailPanel({ alert, account, onMarkArchived, onDelete, onUpdate
     );
   }
 
-  const tag     = account?.tag ?? 'other';
-  const timeAgo = formatDistanceToNow(new Date(alert.detected_at), { addSuffix: true });
+  const tag      = account?.tag ?? 'other';
+  const colors   = tagColors(tag);
+  const timeAgo  = formatDistanceToNow(new Date(alert.detected_at), { addSuffix: true });
   const fullDate = format(new Date(alert.detected_at), 'MMM d, yyyy · HH:mm');
+
+  const handleNewTag = () => {
+    const t = newTagInput.trim().toLowerCase();
+    if (t) {
+      onTagChange(alert.username, t);
+      setAddingTag(false);
+      setNewTagInput('');
+    }
+  };
+
+  // Show all known tags; dedupe in case current tag isn't in allTags yet
+  const tagOptions = allTags.includes(tag) ? allTags : [...allTags, tag];
 
   return (
     <div className="w-[300px] flex-shrink-0 border-l border-zinc-800 bg-zinc-900/50
                     flex flex-col overflow-hidden">
 
-      {/* Avatar + username header */}
+      {/* Avatar + username */}
       <div className="flex flex-col items-center gap-3 px-5 pt-6 pb-4 border-b border-zinc-800 flex-shrink-0">
         <div className={`w-14 h-14 rounded-full flex items-center justify-center
-                         text-xl font-bold uppercase select-none ${AVATAR_BG[tag]}`}>
+                         text-xl font-bold uppercase select-none ${colors.avatar}`}>
           {alert.username[0]}
         </div>
         <div className="text-center">
@@ -68,48 +80,88 @@ export function DetailPanel({ alert, account, onMarkArchived, onDelete, onUpdate
         </div>
       </div>
 
-      {/* Scrollable body */}
+      {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
 
         {/* Metadata */}
         <div>
           <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">Details</p>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: 'Stories',  value: alert.story_count },
-              { label: 'New',      value: alert.new_ids.length },
-              { label: 'Detected', value: timeAgo, full: true },
-              { label: 'Date',     value: fullDate, full: true },
-            ].filter(x => !x.full).map(({ label, value }) => (
-              <div key={label} className="bg-zinc-800/50 rounded-lg px-3 py-2 text-center">
-                <div className="text-base font-semibold text-zinc-100">{value}</div>
-                <div className="text-[10px] text-zinc-600 uppercase tracking-wide">{label}</div>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="bg-zinc-800/50 rounded-lg px-3 py-2 text-center">
+              <div className="text-base font-semibold text-zinc-100">{alert.story_count}</div>
+              <div className="text-[10px] text-zinc-600 uppercase tracking-wide">Stories</div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg px-3 py-2 text-center">
+              <div className="text-base font-semibold text-zinc-100">{alert.new_ids.length}</div>
+              <div className="text-[10px] text-zinc-600 uppercase tracking-wide">New</div>
+            </div>
           </div>
-          <div className="mt-2 bg-zinc-800/50 rounded-lg px-3 py-2">
+          <div className="bg-zinc-800/50 rounded-lg px-3 py-2">
             <div className="text-xs text-zinc-400">{timeAgo}</div>
             <div className="text-[10px] text-zinc-600">{fullDate}</div>
           </div>
         </div>
 
-        {/* Tag picker */}
+        {/* Tag */}
         <div>
           <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">Tag</p>
-          <div className="flex gap-1.5">
-            {TAG_BTNS.map(({ value, label, active: activeStyle }) => (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {tagOptions.map(t => {
+              const c = tagColors(t);
+              const isActive = tag === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => onTagChange(alert.username, t)}
+                  className={`px-3 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${
+                    isActive ? c.pillActive : c.pill
+                  }`}
+                >
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              );
+            })}
+
+            {/* Add custom tag */}
+            {addingTag ? (
+              <div className="flex items-center gap-1">
+                <input
+                  ref={newTagRef}
+                  value={newTagInput}
+                  onChange={e => setNewTagInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleNewTag();
+                    if (e.key === 'Escape') { setAddingTag(false); setNewTagInput(''); }
+                  }}
+                  placeholder="tag name"
+                  className="w-24 px-2 py-1 rounded-lg border border-zinc-600 bg-zinc-800
+                             text-[11px] text-zinc-200 placeholder-zinc-600
+                             focus:outline-none focus:border-zinc-500"
+                />
+                <button
+                  onClick={handleNewTag}
+                  className="px-2 py-1 rounded-lg border border-zinc-700 text-[11px]
+                             text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => { setAddingTag(false); setNewTagInput(''); }}
+                  className="text-[11px] text-zinc-700 hover:text-zinc-500 px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
               <button
-                key={value}
-                onClick={() => onTagChange(alert.username, value)}
-                className={`flex-1 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${
-                  tag === value
-                    ? activeStyle
-                    : 'border-zinc-800 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400'
-                }`}
+                onClick={() => setAddingTag(true)}
+                className="px-2.5 py-1.5 rounded-lg border border-dashed border-zinc-700
+                           text-[11px] text-zinc-600 hover:border-zinc-500 hover:text-zinc-400
+                           transition-colors"
               >
-                {label}
+                + New
               </button>
-            ))}
+            )}
           </div>
         </div>
 
@@ -130,7 +182,7 @@ export function DetailPanel({ alert, account, onMarkArchived, onDelete, onUpdate
           />
         </div>
 
-        {/* Story IDs preview */}
+        {/* New story IDs */}
         {alert.new_ids.length > 0 && (
           <div>
             <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">
@@ -145,7 +197,7 @@ export function DetailPanel({ alert, account, onMarkArchived, onDelete, onUpdate
         )}
       </div>
 
-      {/* Footer actions */}
+      {/* Footer */}
       <div className="flex-shrink-0 border-t border-zinc-800 px-4 py-3 flex gap-2">
         <a
           href={`https://www.instagram.com/stories/${alert.username}/`}
@@ -159,7 +211,6 @@ export function DetailPanel({ alert, account, onMarkArchived, onDelete, onUpdate
         {!alert.is_archived && (
           <button
             onClick={() => onMarkArchived(alert.id)}
-            title="Archive"
             className="px-3 py-2 rounded-lg border border-zinc-700 text-[11px] text-zinc-400
                        hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
           >
@@ -168,14 +219,12 @@ export function DetailPanel({ alert, account, onMarkArchived, onDelete, onUpdate
         )}
         <button
           onClick={() => onDelete(alert.id)}
-          title="Delete permanently"
           className="px-3 py-2 rounded-lg border border-zinc-800 text-[11px] text-zinc-600
                      hover:border-rose-900/50 hover:bg-rose-950/30 hover:text-rose-400 transition-colors"
         >
           Delete
         </button>
       </div>
-
     </div>
   );
 }

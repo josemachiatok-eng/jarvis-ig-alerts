@@ -3,15 +3,15 @@ import { supabase } from '../lib/supabase';
 import { LoginPage } from './LoginPage';
 import { MFAPage } from './MFAPage';
 
-const IDLE_MS = 30 * 60 * 1000; // 30 minutes
-
 type AuthState = 'loading' | 'signed_out' | 'needs_mfa' | 'authed';
 
 interface Props {
   children: React.ReactNode;
 }
 
-// Wraps a promise with a hard timeout so we never hang on loading forever.
+const IDLE_MS    = 4 * 60 * 60 * 1000; // 4 hours
+const TIMEOUT_MS = 12_000;             // 12 s per Supabase call
+
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
@@ -49,7 +49,7 @@ export function AuthGate({ children }: Props) {
     try {
       const { data: sessionData } = await withTimeout(
         supabase.auth.getSession(),
-        6000,
+        TIMEOUT_MS,
       );
 
       if (!sessionData.session) {
@@ -59,7 +59,7 @@ export function AuthGate({ children }: Props) {
 
       const { data: aalData } = await withTimeout(
         supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-        6000,
+        TIMEOUT_MS,
       );
 
       if (aalData?.currentLevel === 'aal2') {
@@ -68,14 +68,19 @@ export function AuthGate({ children }: Props) {
         setState('needs_mfa');
       }
     } catch {
-      // Network error or timeout — drop back to login so the user isn't stuck.
       setState('signed_out');
     }
   }, []);
 
   useEffect(() => {
     refresh();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => refresh());
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // TOKEN_REFRESHED fires every hour automatically — no need to re-check MFA level.
+      // INITIAL_SESSION is handled by the refresh() call above on mount.
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'MFA_CHALLENGE_VERIFIED') {
+        refresh();
+      }
+    });
     return () => subscription.unsubscribe();
   }, [refresh]);
 
@@ -83,7 +88,6 @@ export function AuthGate({ children }: Props) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4">
         <div className="text-zinc-600 text-sm">Checking session…</div>
-        {/* Escape hatch: if still stuck after a few seconds the user can force-reload */}
         <button
           onClick={() => window.location.reload()}
           className="text-xs text-zinc-800 hover:text-zinc-500 transition-colors underline"
