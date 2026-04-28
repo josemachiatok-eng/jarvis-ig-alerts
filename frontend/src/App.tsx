@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useAlerts } from './hooks/useAlerts';
+import { AuthGate } from './components/AuthGate';
 import { FilterBar } from './components/FilterBar';
 import { AlertList } from './components/AlertList';
 import { DigestView } from './components/DigestView';
 import { NoteModal } from './components/NoteModal';
+import { supabase } from './lib/supabase';
 import type { Filters, Alert } from './types';
 
 const DEFAULT_FILTERS: Filters = {
@@ -17,7 +19,7 @@ const DEFAULT_FILTERS: Filters = {
 
 type View = 'list' | 'digest';
 
-export default function App() {
+function Dashboard() {
   const [filters,    setFilters]    = useState<Filters>(DEFAULT_FILTERS);
   const [view,       setView]       = useState<View>('list');
   const [noteTarget, setNoteTarget] = useState<Alert | null>(null);
@@ -65,6 +67,15 @@ export default function App() {
               Mark all read
             </button>
           )}
+
+          {/* Sign out */}
+          <button
+            onClick={() => supabase.auth.signOut()}
+            title="Sign out"
+            className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors px-1"
+          >
+            ⏻
+          </button>
 
           {/* View toggle */}
           <div className="flex rounded-lg overflow-hidden border border-zinc-700">
@@ -123,5 +134,13 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthGate>
+      <Dashboard />
+    </AuthGate>
   );
 }
