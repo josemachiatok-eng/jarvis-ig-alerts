@@ -1,0 +1,32 @@
+name: Instagram Story Monitor
+
+on:
+  schedule:
+    # 263 accounts × 60 s delay ≈ 4.4 hours per run.
+    # Schedule every 5 hours to keep runs from overlapping.
+    - cron: "0 */5 * * *"
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 290      # 4.8-hour safety net
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run monitor
+        env:
+          IG_USERNAME:          ${{ secrets.IG_USERNAME }}
+          SESSION_B64:          ${{ secrets.SESSION_B64 }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python pipeline/instagram_story_monitor.py
