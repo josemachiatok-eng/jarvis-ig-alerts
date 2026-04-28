@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { LoginPage } from './LoginPage';
 import { MFAPage } from './MFAPage';
+
+const IDLE_MS = 30 * 60 * 1000; // 30 minutes
 
 type AuthState = 'loading' | 'signed_out' | 'needs_mfa' | 'authed';
 
@@ -21,6 +23,27 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export function AuthGate({ children }: Props) {
   const [state, setState] = useState<AuthState>('loading');
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const signOutIdle = useCallback(() => {
+    supabase.auth.signOut();
+    setState('signed_out');
+  }, []);
+
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(signOutIdle, IDLE_MS);
+  }, [signOutIdle]);
+
+  useEffect(() => {
+    const events = ['mousemove', 'keydown', 'pointerdown', 'scroll'];
+    events.forEach(e => window.addEventListener(e, resetIdleTimer, { passive: true }));
+    resetIdleTimer();
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetIdleTimer));
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+    };
+  }, [resetIdleTimer]);
 
   const refresh = useCallback(async () => {
     try {

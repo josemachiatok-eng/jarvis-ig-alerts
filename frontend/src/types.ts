@@ -1,4 +1,5 @@
 export type Tag = 'favourite' | 'special' | 'other';
+export type View = 'all' | 'favourite' | 'special' | 'unread';  // or a username string
 
 export interface Account {
   id: string;
@@ -21,16 +22,4 @@ export interface Alert {
   note: string | null;
   detected_at: string;
   created_at: string;
-}
-
-export type SortField = 'detected_at' | 'username' | 'story_count';
-export type SortDir = 'asc' | 'desc';
-
-export interface Filters {
-  search: string;
-  tags: Tag[];
-  showRead: boolean;
-  showArchived: boolean;
-  sortField: SortField;
-  sortDir: SortDir;
 }
