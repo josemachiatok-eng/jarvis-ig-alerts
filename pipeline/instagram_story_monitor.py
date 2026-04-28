@@ -21,7 +21,7 @@ from pathlib import Path
 #  CONFIGURATION
 # ─────────────────────────────────────────────
 
-IG_USERNAME          = os.environ.get("IG_USERNAME",          "realedmscene")
+IG_USERNAME          = os.environ.get("IG_USERNAME",          "memerman_016")
 SESSION_B64          = os.environ.get("SESSION_B64",          "")
 SUPABASE_URL         = os.environ.get("SUPABASE_URL",         "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
