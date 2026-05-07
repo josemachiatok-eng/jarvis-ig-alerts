@@ -14,12 +14,22 @@ interface Props {
   onTagChange: (username: string, tag: Tag) => void;
 }
 
+async function downloadMedia(url: string, filename: string) {
+  const res  = await fetch(url);
+  const blob = await res.blob();
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 // ── Media gallery ─────────────────────────────────────────────
 function MediaGallery({ alertId, username }: { alertId: string; username: string }) {
-  const [files,     setFiles]     = useState<StoryFile[]>([]);
-  const [urls,      setUrls]      = useState<Map<string, string>>(new Map());
-  const [loading,   setLoading]   = useState(true);
-  const [fullscreen, setFullscreen] = useState<string | null>(null);
+  const [files,      setFiles]      = useState<StoryFile[]>([]);
+  const [urls,       setUrls]       = useState<Map<string, string>>(new Map());
+  const [loading,    setLoading]    = useState(true);
+  const [fullscreen, setFullscreen] = useState<StoryFile | null>(null);
 
   useEffect(() => {
     setFiles([]);
@@ -35,7 +45,6 @@ function MediaGallery({ alertId, username }: { alertId: string; username: string
         const items = (data ?? []) as StoryFile[];
         setFiles(items);
 
-        // Generate signed URLs (1-hour expiry)
         const map = new Map<string, string>();
         await Promise.all(
           items.map(async f => {
@@ -48,7 +57,7 @@ function MediaGallery({ alertId, username }: { alertId: string; username: string
         setUrls(map);
         setLoading(false);
       });
-  }, [alertId, username]);
+  }, [alertId]);
 
   if (loading) {
     return <p className="text-[11px] text-zinc-700 italic">Loading media…</p>;
@@ -67,30 +76,18 @@ function MediaGallery({ alertId, username }: { alertId: string; username: string
           return (
             <button
               key={f.id}
-              onClick={() => setFullscreen(f.id)}
+              onClick={() => setFullscreen(f)}
               className="relative rounded-lg overflow-hidden bg-zinc-800 aspect-[9/16]
                          hover:ring-2 hover:ring-zinc-500 transition-all"
             >
               {f.is_video ? (
-                <video
-                  src={url}
-                  className="w-full h-full object-cover"
-                  muted
-                  playsInline
-                />
+                <video src={url} className="w-full h-full object-cover" muted playsInline />
               ) : (
-                <img
-                  src={url}
-                  alt={`story ${f.story_id}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
+                <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
               )}
               {f.is_video && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white text-sm">
-                    ▶
-                  </div>
+                  <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white text-sm">▶</div>
                 </div>
               )}
             </button>
@@ -100,33 +97,47 @@ function MediaGallery({ alertId, username }: { alertId: string; username: string
 
       {/* Fullscreen lightbox */}
       {fullscreen && (() => {
-        const f   = files.find(x => x.id === fullscreen);
-        const url = f ? urls.get(f.id) : undefined;
-        if (!f || !url) return null;
+        const url = urls.get(fullscreen.id);
+        if (!url) return null;
+        const filename = `${username}_${fullscreen.story_id}.${fullscreen.is_video ? 'mp4' : 'jpg'}`;
         return (
           <div
-            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+            className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center gap-3"
             onClick={() => setFullscreen(null)}
           >
-            <button
-              className="absolute top-4 right-4 text-white/60 hover:text-white text-2xl"
-              onClick={() => setFullscreen(null)}
-            >
-              ✕
-            </button>
-            {f.is_video ? (
+            {/* Top bar */}
+            <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-black/40">
+              <span className="text-white/60 text-xs">@{username}</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={e => { e.stopPropagation(); downloadMedia(url, filename); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10
+                             hover:bg-white/20 text-white text-xs transition-colors"
+                >
+                  ↓ Download
+                </button>
+                <button
+                  onClick={() => setFullscreen(null)}
+                  className="text-white/60 hover:text-white text-xl px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {fullscreen.is_video ? (
               <video
                 src={url}
                 controls
-                autoPlay
-                className="max-h-screen max-w-full rounded-xl"
+                muted
+                className="max-h-[85vh] max-w-full rounded-xl"
                 onClick={e => e.stopPropagation()}
               />
             ) : (
               <img
                 src={url}
-                alt="story"
-                className="max-h-screen max-w-full rounded-xl object-contain"
+                alt=""
+                className="max-h-[85vh] max-w-full rounded-xl object-contain"
                 onClick={e => e.stopPropagation()}
               />
             )}
