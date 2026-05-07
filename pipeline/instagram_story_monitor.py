@@ -28,7 +28,7 @@ SUPABASE_URL         = os.environ.get("SUPABASE_URL",         "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
 STORAGE_BUCKET = "stories"
-PURGE_DAYS     = 60   # delete media older than this
+PURGE_DAYS     = 3    # delete media older than this
 
 _default_accounts = ",".join([
     "alinta.tatana", "kenyavillascan", "0agusperez", "ana_najar15",
