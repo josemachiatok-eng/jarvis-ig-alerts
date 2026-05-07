@@ -1,4 +1,4 @@
-export type Tag = string;  // any user-defined label; built-ins: 'favourite' | 'special' | 'other'
+export type Tag  = string;  // any user-defined label; built-ins: 'favourite' | 'special' | 'other'
 export type View = 'all' | 'unread' | string;  // 'all', 'unread', a tag, or a username
 
 export interface Account {
@@ -21,5 +21,16 @@ export interface Alert {
   is_archived: boolean;
   note: string | null;
   detected_at: string;
+  created_at: string;
+}
+
+export interface StoryFile {
+  id: string;
+  username: string;
+  story_id: string;
+  alert_id: string | null;
+  storage_path: string;
+  is_video: boolean;
+  taken_at: string | null;
   created_at: string;
 }

@@ -10,7 +10,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 290      # 4.8-hour safety net
+    timeout-minutes: 180      # 82 accounts × 60s + download time ≈ 2.5 h
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

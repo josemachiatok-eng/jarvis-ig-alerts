@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatDistanceToNow, format } from 'date-fns';
-import type { Alert, Account, Tag } from '../types';
+import type { Alert, Account, Tag, StoryFile } from '../types';
 import { tagColors } from '../lib/tagColors';
+import { supabase } from '../lib/supabase';
 
 interface Props {
   alert: Alert | null;
@@ -13,10 +14,134 @@ interface Props {
   onTagChange: (username: string, tag: Tag) => void;
 }
 
+// ── Media gallery ─────────────────────────────────────────────
+function MediaGallery({ alertId, username }: { alertId: string; username: string }) {
+  const [files,     setFiles]     = useState<StoryFile[]>([]);
+  const [urls,      setUrls]      = useState<Map<string, string>>(new Map());
+  const [loading,   setLoading]   = useState(true);
+  const [fullscreen, setFullscreen] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFiles([]);
+    setUrls(new Map());
+    setLoading(true);
+
+    supabase
+      .from('story_files')
+      .select('*')
+      .eq('alert_id', alertId)
+      .order('taken_at', { ascending: true })
+      .then(async ({ data }) => {
+        const items = (data ?? []) as StoryFile[];
+        setFiles(items);
+
+        // Generate signed URLs (1-hour expiry)
+        const map = new Map<string, string>();
+        await Promise.all(
+          items.map(async f => {
+            const { data: signed } = await supabase.storage
+              .from('stories')
+              .createSignedUrl(f.storage_path, 3600);
+            if (signed?.signedUrl) map.set(f.id, signed.signedUrl);
+          })
+        );
+        setUrls(map);
+        setLoading(false);
+      });
+  }, [alertId, username]);
+
+  if (loading) {
+    return <p className="text-[11px] text-zinc-700 italic">Loading media…</p>;
+  }
+
+  if (files.length === 0) {
+    return <p className="text-[11px] text-zinc-700 italic">No media stored yet.</p>;
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-1.5">
+        {files.map(f => {
+          const url = urls.get(f.id);
+          if (!url) return null;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFullscreen(f.id)}
+              className="relative rounded-lg overflow-hidden bg-zinc-800 aspect-[9/16]
+                         hover:ring-2 hover:ring-zinc-500 transition-all"
+            >
+              {f.is_video ? (
+                <video
+                  src={url}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                />
+              ) : (
+                <img
+                  src={url}
+                  alt={`story ${f.story_id}`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              )}
+              {f.is_video && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white text-sm">
+                    ▶
+                  </div>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Fullscreen lightbox */}
+      {fullscreen && (() => {
+        const f   = files.find(x => x.id === fullscreen);
+        const url = f ? urls.get(f.id) : undefined;
+        if (!f || !url) return null;
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+            onClick={() => setFullscreen(null)}
+          >
+            <button
+              className="absolute top-4 right-4 text-white/60 hover:text-white text-2xl"
+              onClick={() => setFullscreen(null)}
+            >
+              ✕
+            </button>
+            {f.is_video ? (
+              <video
+                src={url}
+                controls
+                autoPlay
+                className="max-h-screen max-w-full rounded-xl"
+                onClick={e => e.stopPropagation()}
+              />
+            ) : (
+              <img
+                src={url}
+                alt="story"
+                className="max-h-screen max-w-full rounded-xl object-contain"
+                onClick={e => e.stopPropagation()}
+              />
+            )}
+          </div>
+        );
+      })()}
+    </>
+  );
+}
+
+// ── Detail panel ──────────────────────────────────────────────
 export function DetailPanel({ alert, account, allTags, onMarkArchived, onDelete, onUpdateNote, onTagChange }: Props) {
-  const [note,         setNote]         = useState('');
-  const [addingTag,    setAddingTag]    = useState(false);
-  const [newTagInput,  setNewTagInput]  = useState('');
+  const [note,        setNote]        = useState('');
+  const [addingTag,   setAddingTag]   = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
   const newTagRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,7 +177,6 @@ export function DetailPanel({ alert, account, allTags, onMarkArchived, onDelete,
     }
   };
 
-  // Show all known tags; dedupe in case current tag isn't in allTags yet
   const tagOptions = allTags.includes(tag) ? allTags : [...allTags, tag];
 
   return (
@@ -80,7 +204,7 @@ export function DetailPanel({ alert, account, allTags, onMarkArchived, onDelete,
         </div>
       </div>
 
-      {/* Body */}
+      {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
 
         {/* Metadata */}
@@ -102,27 +226,32 @@ export function DetailPanel({ alert, account, allTags, onMarkArchived, onDelete,
           </div>
         </div>
 
+        {/* Media gallery */}
+        <div>
+          <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">
+            Saved Media
+          </p>
+          <MediaGallery alertId={alert.id} username={alert.username} />
+        </div>
+
         {/* Tag */}
         <div>
           <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">Tag</p>
           <div className="flex flex-wrap gap-1.5 mb-2">
             {tagOptions.map(t => {
               const c = tagColors(t);
-              const isActive = tag === t;
               return (
                 <button
                   key={t}
                   onClick={() => onTagChange(alert.username, t)}
                   className={`px-3 py-1.5 rounded-lg border text-[11px] font-medium transition-all ${
-                    isActive ? c.pillActive : c.pill
+                    tag === t ? c.pillActive : c.pill
                   }`}
                 >
                   {t.charAt(0).toUpperCase() + t.slice(1)}
                 </button>
               );
             })}
-
-            {/* Add custom tag */}
             {addingTag ? (
               <div className="flex items-center gap-1">
                 <input
@@ -175,26 +304,12 @@ export function DetailPanel({ alert, account, allTags, onMarkArchived, onDelete,
               if (note !== (alert.note ?? '')) onUpdateNote(alert.id, note);
             }}
             placeholder="Add a note…"
-            rows={4}
+            rows={3}
             className="w-full px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-800/50
                        text-xs text-zinc-300 placeholder-zinc-700 resize-none
                        focus:outline-none focus:border-zinc-600 transition-colors"
           />
         </div>
-
-        {/* New story IDs */}
-        {alert.new_ids.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">
-              New Story IDs
-            </p>
-            <div className="space-y-0.5 max-h-24 overflow-y-auto">
-              {alert.new_ids.map(id => (
-                <p key={id} className="text-[10px] text-zinc-600 font-mono truncate">{id}</p>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Footer */}
