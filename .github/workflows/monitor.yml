@@ -2,9 +2,9 @@ name: Instagram Story Monitor
 
 on:
   schedule:
-    # 263 accounts × 60 s delay ≈ 4.4 hours per run.
-    # Schedule every 5 hours to keep runs from overlapping.
-    - cron: "0 */5 * * *"
+    # 82 accounts × 60 s delay ≈ 1.4 hours per run.
+    # Schedule every 3 hours to keep runs from overlapping.
+    - cron: "0 */3 * * *"
   workflow_dispatch:
 
 jobs:

@@ -314,11 +314,15 @@ def download_new_items(stories, new_id_set: set) -> list:
 
 def check_stories(loader: instaloader.Instaloader, state: dict):
     total = len(TARGET_ACCOUNTS)
+    login_failures = 0
+    LOGIN_FAILURE_THRESHOLD = 3   # bail after this many consecutive login errors
+
     for i, username in enumerate(TARGET_ACCOUNTS, 1):
         log.info(f"[{i}/{total}] Checking @{username}…")
         try:
             profile = instaloader.Profile.from_username(loader.context, username)
             stories = list(loader.get_stories(userids=[profile.userid]))
+            login_failures = 0  # reset on success
 
             if not stories:
                 log.info("  No active stories.")
@@ -371,7 +375,22 @@ def check_stories(loader: instaloader.Instaloader, state: dict):
         except instaloader.exceptions.ProfileNotExistsException:
             log.warning(f"  @{username} not found or private")
         except instaloader.exceptions.LoginRequiredException:
-            log.error(f"  Login required for @{username} — refresh SESSION_B64")
+            login_failures += 1
+            log.error(
+                f"  Login required for @{username} "
+                f"({login_failures}/{LOGIN_FAILURE_THRESHOLD}) — SESSION_B64 likely expired"
+            )
+            if login_failures >= LOGIN_FAILURE_THRESHOLD:
+                log.error(
+                    "SESSION EXPIRED — aborting run.\n"
+                    "Regenerate SESSION_B64 with:\n"
+                    "  pip install instaloader && python -c \""
+                    "import instaloader,base64,pickle; "
+                    "L=instaloader.Instaloader(); "
+                    "L.interactive_login('memerman_016'); "
+                    "print(base64.b64encode(pickle.dumps(L.context._session.cookies)).decode())\""
+                )
+                sys.exit(2)
         except Exception as e:
             log.error(f"  Error checking @{username}: {e}")
 
