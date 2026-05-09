@@ -9,6 +9,7 @@ instagram_story_monitor.py — Supabase edition v2
 import os
 import sys
 import time
+import random
 import base64
 import pickle
 import logging
@@ -142,6 +143,8 @@ def upsert_account(username: str):
             json={"username": username},
             timeout=30,
         )
+        if r.status_code in (200, 201, 409):  # 409 = already exists, fine
+            return
         r.raise_for_status()
     except Exception as e:
         log.warning(f"  Could not upsert account @{username}: {e}")
@@ -309,6 +312,40 @@ def download_new_items(stories, new_id_set: set) -> list:
     return downloaded
 
 # ─────────────────────────────────────────────
+#  HUMAN-LIKE DELAY
+# ─────────────────────────────────────────────
+
+def _human_delay(position: int, total: int):
+    """
+    Sleep for a realistic human-like interval between account checks.
+
+    Behaviour model:
+      • Normal scroll  : 40–100 s  (gaussian μ=65, σ=18) — most common
+      • Distracted     : 3–8 min   (~10% of transitions) — got a text, made coffee
+      • Deep dive      : 8–18 min  (~3% of transitions)  — watched something, replied to DMs
+      • No sleep on the very last account
+    """
+    if position >= total:
+        return
+
+    roll = random.random()
+
+    if roll < 0.03:                              # 3% — deep-dive break
+        t = random.uniform(480, 1080)
+        log.info(f"  [human] Long break {t/60:.1f} min (deep-dive simulation)…")
+    elif roll < 0.13:                            # 10% — distraction break
+        t = random.uniform(180, 480)
+        log.info(f"  [human] Short break {t/60:.1f} min (distraction simulation)…")
+    else:                                        # 87% — normal scroll pace
+        t = max(40, min(130, random.gauss(65, 18)))
+
+    # Add a tiny sub-second jitter so requests never arrive at a round interval
+    t += random.uniform(0.5, 4.5)
+    log.info(f"  [human] Waiting {t:.1f} s before next account…")
+    time.sleep(t)
+
+
+# ─────────────────────────────────────────────
 #  STORY CHECK
 # ─────────────────────────────────────────────
 
@@ -394,8 +431,7 @@ def check_stories(loader: instaloader.Instaloader, state: dict):
         except Exception as e:
             log.error(f"  Error checking @{username}: {e}")
 
-        if i < total:
-            time.sleep(60)
+        _human_delay(i, total)
 
 # ─────────────────────────────────────────────
 #  MAIN

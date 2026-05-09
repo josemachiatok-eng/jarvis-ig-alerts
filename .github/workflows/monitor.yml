@@ -9,7 +9,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 180      # 82 accounts × 60s + download time ≈ 2.5 h
+    timeout-minutes: 330      # 82 accounts × variable human delay (avg ~65s + breaks) ≈ up to 5.5 h
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
