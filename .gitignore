@@ -5,3 +5,5 @@ frontend/dist.zip
 __pycache__/
 *.pyc
 *.zip
+pipeline/.env
+pipeline/local_monitor.log

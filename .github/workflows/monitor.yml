@@ -1,10 +1,9 @@
 name: Instagram Story Monitor
 
 on:
-  schedule:
-    # 82 accounts × 60 s delay ≈ 1.4 hours per run.
-    # Schedule every 3 hours to keep runs from overlapping.
-    - cron: "0 */3 * * *"
+  # Scheduled runs disabled — GitHub Actions uses datacenter IPs that Instagram blocks.
+  # The monitor now runs locally via Windows Task Scheduler (pipeline/run_local.ps1).
+  # Keep workflow_dispatch for manual testing only.
   workflow_dispatch:
 
 jobs:
