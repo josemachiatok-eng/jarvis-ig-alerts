@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
 import { useAlerts } from './hooks/useAlerts';
 import { AuthGate } from './components/AuthGate';
 import { Sidebar } from './components/Sidebar';
 import { AlertList } from './components/AlertList';
 import { DetailPanel } from './components/DetailPanel';
 import { supabase } from './lib/supabase';
+import { downloadAllAsZip, type ZipProgress } from './lib/downloadZip';
 import type { Alert } from './types';
 
 type SortMode = 'time' | 'account' | 'count';
@@ -22,6 +23,23 @@ function Dashboard() {
   const [search,     setSearch]     = useState('');
   const [sort,       setSort]       = useState<SortMode>('time');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // ── ZIP download state ─────────────────────────────────────
+  const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const handleDownloadZip = useCallback(async () => {
+    abortRef.current = new AbortController();
+    setZipProgress({ phase: 'fetching', current: 0, total: 0, message: 'Starting…' });
+    await downloadAllAsZip(setZipProgress, abortRef.current.signal);
+    // Keep the 'done' or 'error' state visible for 3 s then auto-dismiss
+    setTimeout(() => setZipProgress(null), 3_000);
+  }, []);
+
+  const handleCancelZip = () => {
+    abortRef.current?.abort();
+    setZipProgress(null);
+  };
 
   // ── Derived data ──────────────────────────────────────────────
   const active = useMemo(() => allAlerts.filter(a => !a.is_archived), [allAlerts]);
@@ -163,6 +181,16 @@ function Dashboard() {
             </button>
           )}
           <button
+            onClick={handleDownloadZip}
+            disabled={zipProgress !== null}
+            title="Download all saved media as ZIP"
+            className="flex items-center gap-1.5 px-3 py-[5px] rounded-lg border border-zinc-700
+                       text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200
+                       disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            ↓ ZIP
+          </button>
+          <button
             onClick={() => supabase.auth.signOut()}
             title="Sign out"
             className="text-zinc-600 hover:text-zinc-400 transition-colors text-sm px-1"
@@ -233,6 +261,60 @@ function Dashboard() {
         onUpdateNote={updateNote}
         onTagChange={updateAccountTag}
       />
+
+      {/* ── ZIP download progress modal ───────────────────── */}
+      {zipProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-[340px] bg-zinc-900 border border-zinc-700 rounded-2xl px-6 py-5 shadow-2xl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold text-zinc-100">
+                {zipProgress.phase === 'done'  ? '✓ Download ready'
+               : zipProgress.phase === 'error' ? '✕ Download failed'
+               : '↓ Preparing ZIP…'}
+              </span>
+              {(zipProgress.phase === 'done' || zipProgress.phase === 'error') ? (
+                <button
+                  onClick={() => setZipProgress(null)}
+                  className="text-zinc-500 hover:text-zinc-300 text-lg px-1 leading-none"
+                >✕</button>
+              ) : (
+                <button
+                  onClick={handleCancelZip}
+                  className="text-[11px] text-zinc-500 hover:text-zinc-300 border border-zinc-700
+                             px-2 py-1 rounded-lg transition-colors"
+                >Cancel</button>
+              )}
+            </div>
+
+            {/* Message */}
+            <p className="text-xs text-zinc-400 mb-3">{zipProgress.message}</p>
+
+            {/* Progress bar */}
+            {zipProgress.phase !== 'done' && zipProgress.phase !== 'error' && (
+              <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="h-full bg-zinc-400 rounded-full transition-all duration-300"
+                  style={{
+                    width: zipProgress.total > 0
+                      ? `${Math.round((zipProgress.current / zipProgress.total) * 100)}%`
+                      : '100%',
+                    animation: zipProgress.total === 0 ? 'pulse 1.5s ease-in-out infinite' : undefined,
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Count label */}
+            {zipProgress.total > 0 && zipProgress.phase === 'downloading' && (
+              <p className="text-[10px] text-zinc-600 mt-1.5 text-right">
+                {zipProgress.current} / {zipProgress.total} files
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
