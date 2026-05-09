@@ -1,68 +1,41 @@
 # setup_task_scheduler.ps1
-# Run this ONCE as Administrator to register a Windows Task Scheduler job.
-# The monitor will run every 3 hours automatically, even when the window is minimised.
-#
-# To run: right-click → "Run as administrator"
+# Run from an elevated PowerShell prompt to register the scheduled task.
 
-$TaskName   = "JarvisIGMonitor"
-$ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RunScript  = Join-Path $ScriptDir "run_local.ps1"
-
-# Check admin
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
-    [Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Error "Please run this script as Administrator (right-click → Run as administrator)."
-    exit 1
-}
+$TaskName  = "JarvisIGMonitor"
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RunScript = Join-Path $ScriptDir "run_local.ps1"
 
 if (-not (Test-Path $RunScript)) {
-    Write-Error "run_local.ps1 not found at: $RunScript"
+    Write-Host "ERROR: run_local.ps1 not found at $RunScript" -ForegroundColor Red
     exit 1
 }
 
-# Remove old task if it exists
-Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+# Remove existing task silently
+schtasks /delete /tn $TaskName /f 2>$null | Out-Null
 
-# Action: run PowerShell hidden (no window flash)
-$Action = New-ScheduledTaskAction `
-    -Execute "powershell.exe" `
-    -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$RunScript`""
+# Start time = 1 minute from now
+$startTime = (Get-Date).AddMinutes(1).ToString("HH:mm")
 
-# Trigger: every 3 hours starting now
-$Trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Hours 3) -Once -At (Get-Date)
+$psArgs = "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$RunScript`""
 
-# Settings: run whether logged on or not, wake machine, restart on failure
-$Settings = New-ScheduledTaskSettingsSet `
-    -ExecutionTimeLimit (New-TimeSpan -Hours 3) `
-    -RestartCount 1 `
-    -RestartInterval (New-TimeSpan -Minutes 10) `
-    -StartWhenAvailable `
-    -WakeToRun
+# Register: every 3 hours, run as current user with highest privileges
+schtasks /create `
+    /tn  $TaskName `
+    /tr  "powershell.exe $psArgs" `
+    /sc  hourly `
+    /mo  3 `
+    /st  $startTime `
+    /rl  highest `
+    /f
 
-# Principal: run as current user
-$Principal = New-ScheduledTaskPrincipal `
-    -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
-    -LogonType S4U `
-    -RunLevel Highest
-
-$Task = Register-ScheduledTask `
-    -TaskName  $TaskName `
-    -Action    $Action `
-    -Trigger   $Trigger `
-    -Settings  $Settings `
-    -Principal $Principal `
-    -Description "Jarvis Instagram story monitor — runs every 3 hours from residential IP"
-
-if ($Task) {
+if ($LASTEXITCODE -eq 0) {
     Write-Host ""
-    Write-Host "✓ Task '$TaskName' registered successfully!" -ForegroundColor Green
-    Write-Host "  Schedule : every 3 hours" -ForegroundColor Cyan
-    Write-Host "  Script   : $RunScript" -ForegroundColor Cyan
+    Write-Host "Task '$TaskName' registered — runs every 3 hours." -ForegroundColor Green
+    Write-Host "Script : $RunScript" -ForegroundColor Cyan
+    Write-Host "Log    : $ScriptDir\local_monitor.log" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "To run immediately: Start-ScheduledTask -TaskName '$TaskName'" -ForegroundColor Yellow
-    Write-Host "To view logs      : $ScriptDir\local_monitor.log" -ForegroundColor Yellow
-    Write-Host "To remove task    : Unregister-ScheduledTask -TaskName '$TaskName'" -ForegroundColor Yellow
+    Write-Host "To run immediately:" -ForegroundColor Yellow
+    Write-Host "  Start-ScheduledTask -TaskName '$TaskName'" -ForegroundColor Yellow
 } else {
-    Write-Error "Failed to register task."
+    Write-Host "Failed to register task. Try running as Administrator." -ForegroundColor Red
 }
