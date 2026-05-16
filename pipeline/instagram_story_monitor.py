@@ -27,6 +27,10 @@ IG_USERNAME          = os.environ.get("IG_USERNAME",          "memerman_016")
 SESSION_B64          = os.environ.get("SESSION_B64",          "")
 SUPABASE_URL         = os.environ.get("SUPABASE_URL",         "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+PROXY_URL            = os.environ.get("PROXY_URL",            "")  # e.g. http://user:pass@gate.nodemaven.com:8080
+
+# Proxies dict reused for direct requests.get() calls (Instagram CDN downloads)
+_IG_PROXIES: dict = {}
 
 STORAGE_BUCKET = "stories"
 PURGE_DAYS     = 3    # delete media older than this
@@ -294,7 +298,7 @@ def download_new_items(stories, new_id_set: set) -> list:
                 taken_at     = item.date_utc.replace(tzinfo=timezone.utc) if item.date_utc else datetime.now(timezone.utc)
 
                 log.info(f"    Downloading story item {sid} ({'video' if is_vid else 'image'})…")
-                r = requests.get(url, timeout=60)
+                r = requests.get(url, timeout=60, proxies=_IG_PROXIES or None)
                 r.raise_for_status()
 
                 downloaded.append({
@@ -438,6 +442,8 @@ def check_stories(loader: instaloader.Instaloader, state: dict):
 # ─────────────────────────────────────────────
 
 def main():
+    global _IG_PROXIES
+
     log.info("=" * 55)
     log.info("Instagram Story Monitor v2 (with media storage)")
     log.info(f"Monitoring {len(TARGET_ACCOUNTS)} accounts")
@@ -469,6 +475,18 @@ def main():
         save_metadata=False,
         quiet=True,
     )
+
+    # ── Proxy setup ───────────────────────────────────────────────
+    if PROXY_URL:
+        _IG_PROXIES = {"http": PROXY_URL, "https": PROXY_URL}
+        # Inject into instaloader's internal requests.Session so ALL
+        # Instagram API calls (profile lookups, story fetches) go via proxy
+        loader.context._session.proxies.update(_IG_PROXIES)
+        safe_url = PROXY_URL.split("@")[-1]   # hide user:pass in logs
+        log.info(f"[OK] Proxy enabled → {safe_url}")
+    else:
+        log.warning("PROXY_URL not set — running without proxy (Instagram may block datacenter IP)")
+
     load_session(loader, session_bytes)
 
     state = fetch_state()

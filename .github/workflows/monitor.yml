@@ -1,10 +1,9 @@
 name: Instagram Story Monitor
 
 on:
-  # Scheduled runs disabled — GitHub Actions uses datacenter IPs that Instagram blocks.
-  # The monitor now runs locally via Windows Task Scheduler (pipeline/run_local.ps1).
-  # Keep workflow_dispatch for manual testing only.
-  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours (00:00 / 06:00 / 12:00 / 18:00 UTC)
+  workflow_dispatch:         # keep for manual trigger / testing
 
 jobs:
   monitor:
@@ -28,4 +27,5 @@ jobs:
           SESSION_B64:          ${{ secrets.SESSION_B64 }}
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PROXY_URL:            ${{ secrets.PROXY_URL }}
         run: python pipeline/instagram_story_monitor.py
