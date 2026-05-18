@@ -59,11 +59,25 @@ _default_accounts = ",".join([
     "theflirtygemini", "mikaylademaiter",
 ])
 
-TARGET_ACCOUNTS = [
+_all_accounts = [
     a.strip() for a in
     os.environ.get("TARGET_ACCOUNTS", _default_accounts).split(",")
     if a.strip()
 ]
+
+# ── Rotating batch selection ──────────────────────────────────────
+# Split accounts into 4 batches, each run handles one batch.
+# Batch is chosen by current UTC hour so consecutive 2-hour runs
+# cycle through all accounts (~3 full cycles per day).
+#   Hour  0/ 8/16 → batch 0   (~21 accounts)
+#   Hour  2/10/18 → batch 1   (~21 accounts)
+#   Hour  4/12/20 → batch 2   (~21 accounts)
+#   Hour  6/14/22 → batch 3   (~19 accounts)
+BATCH_COUNT   = 4
+_batch_index  = (datetime.now(timezone.utc).hour // 2) % BATCH_COUNT
+_batch_size   = -(-len(_all_accounts) // BATCH_COUNT)   # ceiling division
+_batch_start  = _batch_index * _batch_size
+TARGET_ACCOUNTS = _all_accounts[_batch_start : _batch_start + _batch_size]
 
 LOG_FILE = Path("/tmp/monitor.log")
 
@@ -446,7 +460,8 @@ def main():
 
     log.info("=" * 55)
     log.info("Instagram Story Monitor v2 (with media storage)")
-    log.info(f"Monitoring {len(TARGET_ACCOUNTS)} accounts")
+    log.info(f"Batch {_batch_index + 1}/{BATCH_COUNT} — {len(TARGET_ACCOUNTS)} accounts "
+             f"(#{_batch_start + 1}–#{_batch_start + len(TARGET_ACCOUNTS)} of {len(_all_accounts)})")
 
     if not SESSION_B64:
         log.error("SESSION_B64 env var is not set.")

@@ -2,13 +2,13 @@ name: Instagram Story Monitor
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # every 6 hours (00:00 / 06:00 / 12:00 / 18:00 UTC)
+    - cron: "0 */2 * * *"   # every 2 hours — each run handles 1 of 4 batches (~21 accounts)
   workflow_dispatch:         # keep for manual trigger / testing
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 330      # 82 accounts × variable human delay (avg ~65s + breaks) ≈ up to 5.5 h
+    timeout-minutes: 90       # ~21 accounts × human delay (avg ~65s + breaks) ≈ up to 1.5 h
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
